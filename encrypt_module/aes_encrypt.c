@@ -10,7 +10,8 @@
 
 #define MEM_SIZE 1024
 
-struct sdesc {
+struct sdesc
+{
     struct shash_desc shash;
     char ctx[];
 };
@@ -25,9 +26,9 @@ char type[100];
 char data[MEM_SIZE];
 size_t data_len = 0;
 
-
-static struct sdesc 
-*init_sdesc(struct crypto_shash *alg) {
+static struct sdesc
+    *init_sdesc(struct crypto_shash *alg) // hàm khởi tạo vùng nhớ cho việc hash
+{
     struct sdesc *sdesc;
     int size;
 
@@ -39,51 +40,47 @@ static struct sdesc
     return sdesc;
 }
 
-static int 
-calc_hash
-(
+static int calc_hash(
     struct crypto_shash *alg,
     const unsigned char *data, unsigned int datalen,
-    unsigned char *digest
-)
+    unsigned char *digest) // hàm thực hiện hash
 {
     struct sdesc *sdesc;
     int ret;
 
-    sdesc = init_sdesc(alg);
-    if (IS_ERR(sdesc)) {
+    sdesc = init_sdesc(alg); // khởi tạo vùng nhớ cho việc hash
+    if (IS_ERR(sdesc))
+    {
         pr_info("can't alloc sdesc\n");
         return PTR_ERR(sdesc);
     }
 
-    ret = crypto_shash_digest(&sdesc->shash, data, datalen, digest);
+    ret = crypto_shash_digest(&sdesc->shash, data, datalen, digest); // thực hiện hash dữ liệu
     kfree(sdesc);
     return ret;
 }
 
-static int 
-sha224_hash
-(
-    const unsigned char *data, 
+static int sha224_hash(
+    const unsigned char *data,
     unsigned int datalen,
-    unsigned char *digest
-)
+    unsigned char *digest)
 {
-    struct crypto_shash *alg;
-    char *hash_alg_name = "sha224";
+    struct crypto_shash *alg;       // khai báo thuật toán
+    char *hash_alg_name = "sha224"; // thuật toán sử dụng để hash
     int ret;
 
-    alg = crypto_alloc_shash(hash_alg_name, 0, 0);
-    if (IS_ERR(alg)) {
-            pr_info("can't alloc alg %s\n", hash_alg_name);
-            return PTR_ERR(alg);
+    alg = crypto_alloc_shash(hash_alg_name, 0, 0); // khởi tạo thuật toán
+    if (IS_ERR(alg))
+    {
+        pr_info("can't alloc alg %s\n", hash_alg_name);
+        return PTR_ERR(alg);
     }
     ret = calc_hash(alg, data, datalen, digest);
-    crypto_free_shash(alg);
+    crypto_free_shash(alg); // giải phóng bộ nhớ
     return ret;
 }
 
-int hextostring(char *in, int len, char *out)
+int hextostring(char *in, int len, char *out) // chuyển đổi từ string về kí tự hex
 {
     int i;
 
@@ -94,7 +91,7 @@ int hextostring(char *in, int len, char *out)
     return 0;
 }
 
-int stringtohex(char *in, int len, char *out)
+int stringtohex(char *in, int len, char *out) // chuyển đổi từ hex về string
 {
     int i;
     int converter[105];
@@ -142,41 +139,41 @@ static ssize_t read_fun(struct file *file, char *user_buf, size_t len, loff_t *o
 
     printk("data_len: %ld\n", data_len);
 
-    memset(cipher, 0, sizeof(cipher));
-    memset(hex_cipher, 0, sizeof(hex_cipher));
+    memset(cipher, 0, sizeof(cipher));         // set giá trị của vùng nhớ
+    memset(hex_cipher, 0, sizeof(hex_cipher)); // set giá trị của vùng nhớ
 
-    if (strcmp(type, "hash") == 0)
+    if (strcmp(type, "hash") == 0) // nếu type là hash thì sẽ thực hiện hash dữ liệu nhận được từ quá trình write
     {
         char sha224[200], sha224_hex[200];
         int len = strlen(data);
 
-        memset(sha224, 0, sizeof(sha224));
-        memset(sha224_hex, 0, sizeof(sha224_hex));
+        memset(sha224, 0, sizeof(sha224));         // set giá trị của vùng nhớ
+        memset(sha224_hex, 0, sizeof(sha224_hex)); // set giá trị của vùng nhớ
 
-        sha224_hash(data, len, sha224);
-        hextostring(sha224, strlen(sha224), sha224_hex);
+        sha224_hash(data, len, sha224);                  // gọi tới hàm sha224_hash để thực hiện hash
+        hextostring(sha224, strlen(sha224), sha224_hex); // chuyển đổi hextostring
         printk("hash: %s\n", sha224_hex);
-        copy_to_user(user_buf, sha224_hex, strlen(sha224_hex));
+        copy_to_user(user_buf, sha224_hex, strlen(sha224_hex)); // copy dữ liệu vừa hash vào user_buff (kernel space => user space)
     }
-    else
+    else // nếu ko phải hash thì chỉ còn 2 TH là encrypt hoặc decrypt
     {
-        for (i = 0; i < data_len / 16; i++)
+        for (i = 0; i < data_len / 16; i++) // khối dữ liệu chia cho 16 và duyệt qua hết các khối
         {
             char one_data[20], one_cipher[20];
 
-            memset(one_data, 0, sizeof(one_data));
-            memset(one_cipher, 0, sizeof(one_cipher));
+            memset(one_data, 0, sizeof(one_data));     // set giá trị của vùng nhớ
+            memset(one_cipher, 0, sizeof(one_cipher)); // set giá trị của vùng nhớ
 
-            for (j = 0; j < 16; j++)
+            for (j = 0; j < 16; j++) // lấy 16 byte dữ liệu
                 one_data[j] = data[i * 16 + j];
 
             printk("one data: %s\n", one_data);
 
-            if (strcmp(type, "encrypt") == 0)
+            if (strcmp(type, "encrypt") == 0) // nếu type là encrypt thì gọi hàm encrypt
                 crypto_cipher_encrypt_one(tfm, one_cipher, one_data);
-            if (strcmp(type, "decrypt") == 0)
+            if (strcmp(type, "decrypt") == 0) // nếu type là decrypt thì gọi hàm decrypt
                 crypto_cipher_decrypt_one(tfm, one_cipher, one_data);
-            for (j = 0; j < 16; j++)
+            for (j = 0; j < 16; j++) // nối các khối dữ liệu sau khi đc en/de
                 cipher[i * 16 + j] = one_cipher[j];
 
             // printk("one cipher: %s\n", one_cipher);
@@ -184,7 +181,7 @@ static ssize_t read_fun(struct file *file, char *user_buf, size_t len, loff_t *o
 
         hextostring(cipher, data_len, hex_cipher);
         printk("hex cipher: %s\n", hex_cipher);
-        copy_to_user(user_buf, hex_cipher, strlen(hex_cipher));
+        copy_to_user(user_buf, hex_cipher, strlen(hex_cipher)); // copy dữ liệu vừa hash vào user_buff (kernel space => user space)
     }
 
     return 0;
@@ -195,16 +192,17 @@ static ssize_t write_fun(struct file *file, const char *user_buff, size_t len, l
     char buffer[1000], hex_data[1000];
     int i, j;
 
-    memset(buffer, 0, sizeof(buffer));
-    memset(data, 0, sizeof(data));
-    memset(type, 0, sizeof(type));
-    memset(hex_data, 0, sizeof(hex_data));
+    memset(buffer, 0, sizeof(buffer));     // set giá trị của vùng nhớ
+    memset(data, 0, sizeof(data));         // set giá trị của vùng nhớ
+    memset(type, 0, sizeof(type));         // set giá trị của vùng nhớ
+    memset(hex_data, 0, sizeof(hex_data)); // set giá trị của vùng nhớ
 
-    copy_from_user(buffer, user_buff, len);
+    copy_from_user(buffer, user_buff, len); // copy dữ liệu từ kernel space vào  user space
 
     i = 0;
     j = 0;
-    while (buffer[i] != '\n' && j < len)
+    while (buffer[i] != '\n' && j < len) // copy câu lệnh cửa lần write này VD"hash, encrypt,decrypt"
+
     {
         type[i] = buffer[j];
         i++;
@@ -213,7 +211,7 @@ static ssize_t write_fun(struct file *file, const char *user_buff, size_t len, l
 
     i = 0;
     j++;
-    while (j < len)
+    while (j < len) // copy dữ liệu
     {
         hex_data[i] = buffer[j];
         i++;
@@ -224,10 +222,10 @@ static ssize_t write_fun(struct file *file, const char *user_buff, size_t len, l
     printk("hex_data: %s\n", hex_data);
 
     memset(buffer, 0, sizeof(buffer));
-    stringtohex(hex_data, strlen(hex_data), data);
+    stringtohex(hex_data, strlen(hex_data), data); // chuyển đổi string to hex
     printk("data: %s\n", data);
 
-    if (strlen(hex_data) % 32 == 0)
+    if (strlen(hex_data) % 32 == 0) // kiểm tra dữ liệu có phải là 1 khối chia hết cho 16 không (16 byte)
         data_len = ((uint16_t)(strlen(hex_data) / 32)) * 16;
     else
         data_len = ((uint16_t)((strlen(hex_data) / 32) + 1)) * 16;
@@ -241,19 +239,20 @@ static struct file_operations fops = {
     .open = open_fun,
     .release = release_fun};
 
-static int md_init(void)
+static int md_init(void) // định nghĩa hàm nào sẽ được gọi khi module được lắp vào kernel
 {
     printk("cai dat module\n");
 
-    tfm = crypto_alloc_cipher("des", 0, 0);
-    crypto_cipher_setkey(tfm, key, 8);
+    tfm = crypto_alloc_cipher("aes", 0, 0); // khởi tạo bộ mã hóa AES
+    crypto_cipher_setkey(tfm, key, 16);     // setkey cho AES
 
-    alloc_chrdev_region(&dev_num, 0, 1, "mahoaaesvasha");
-    device_class = class_create(THIS_MODULE, "class");
-    device_create(device_class, NULL, dev_num, NULL, "aes_encrypt");
+    alloc_chrdev_region(&dev_num, 0, 1, "mahoaaesvasha"); // đăng kí số hiệu cho thiết bị truyền kí tự
+    // khởi tạo châracter device file
+    device_class = class_create(THIS_MODULE, "class");               // tạo một lớp các thiết bị
+    device_create(device_class, NULL, dev_num, NULL, "aes_encrypt"); // tạo thiết bị trong lớp đó
 
-    kernel_buffer = kmalloc(MEM_SIZE, GFP_KERNEL);
-
+    kernel_buffer = kmalloc(MEM_SIZE, GFP_KERNEL); // tạo không gian bộ nhớ trong kernel
+    // đăng kí thiết bị
     char_device = cdev_alloc();
     cdev_init(char_device, &fops);
     cdev_add(char_device, dev_num, 1);
@@ -263,12 +262,12 @@ static int md_init(void)
 
 static void md_exit(void)
 {
-    crypto_free_cipher(tfm);
-    cdev_del(char_device);
+    crypto_free_cipher(tfm); // giải phóng bộ nhớ
+    cdev_del(char_device);   // xóa cdev khởi hệ thống
     kfree(kernel_buffer);
-    device_destroy(device_class, dev_num);
-    class_destroy(device_class);
-    unregister_chrdev_region(dev_num, 1);
+    device_destroy(device_class, dev_num); // xóa thiết bị khởi lớp
+    class_destroy(device_class);           // xóa lớp
+    unregister_chrdev_region(dev_num, 1);  // hủy số hiệu thiết bị
     printk("thoat module\n");
 }
 
